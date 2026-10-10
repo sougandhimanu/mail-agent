@@ -1,0 +1,24 @@
+app = "your-mail-agent-name"   # change to something unique
+primary_region = "ord"
+
+[build]
+
+[env]
+  USER_TIMEZONE = "America/Chicago"
+  DB_PATH = "/data/mail_agent.db"
+
+[mounts]
+  source = "mail_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Must stay running so the scheduler can send on time.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"

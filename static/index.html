@@ -1,0 +1,412 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mail Scheduler</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Public+Sans:wght@400;500;600&display=swap">
+<style>
+  /* Layout: header across the top; chat column in the middle; Outbox panel on the right (a slide-over drawer on narrow screens). */
+  :root {
+    --bg: #f3f5f9;
+    --surface: #ffffff;
+    --raised: #f8f9fc;
+    --ink: #1b2436;
+    --muted: #5f687b;
+    --faint: #8d95a6;
+    --line: #dfe3eb;
+    --accent: #2a4a96;
+    --accent-hover: #233f80;
+    --accent-soft: #e6ecf8;
+    --on-accent: #ffffff;
+    --air-red: #c23b33;
+    --ok: #1f6e4a;    --ok-bg: #e1f3ea;
+    --bad: #b3261e;   --bad-bg: #fbe7e5;
+    --wait: #2a4a96;  --wait-bg: #e6ecf8;
+    --idle: #5f687b;  --idle-bg: #eceef3;
+    --shadow: 0 1px 2px rgb(27 36 54 / .06), 0 4px 16px rgb(27 36 54 / .06);
+    --f-display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --f-body: "Public Sans", "Segoe UI", system-ui, sans-serif;
+    --radius: 14px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #10131a; --surface: #171b24; --raised: #1c212c; --ink: #e4e8f0; --muted: #a0a8b9; --faint: #6f788b;
+      --line: #2a303d; --accent: #7f9ce6; --accent-hover: #9ab1ee; --accent-soft: #1f2a45; --on-accent: #0f1626;
+      --air-red: #e0675f;
+      --ok: #6fd3a2; --ok-bg: #12301f; --bad: #f08a82; --bad-bg: #3a1714;
+      --wait: #8fa8ec; --wait-bg: #1f2a45; --idle: #a0a8b9; --idle-bg: #232937;
+      --shadow: 0 1px 2px rgb(0 0 0 / .3), 0 4px 16px rgb(0 0 0 / .25);
+      color-scheme: dark;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.55 var(--f-body); display: flex; flex-direction: column; overflow: hidden; }
+  button, input, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+  /* header */
+  .stripe { height: 4px; flex: none; background: repeating-linear-gradient(-45deg, var(--air-red) 0 12px, transparent 12px 18px, var(--accent) 18px 30px, transparent 30px 36px); }
+  header { flex: none; display: flex; align-items: center; gap: 12px; padding: 10px 16px; padding-top: calc(10px + env(safe-area-inset-top, 0px)); background: var(--surface); border-bottom: 1px solid var(--line); }
+  .brand { display: flex; align-items: center; gap: 10px; margin-right: auto; min-width: 0; }
+  .brand svg { flex: none; color: var(--accent); }
+  .brand h1 { margin: 0; font: 700 17px/1.1 var(--f-display); letter-spacing: -.01em; white-space: nowrap; }
+  .brand small { display: block; font: 500 12px/1.2 var(--f-body); color: var(--muted); }
+  .pw { position: relative; display: flex; align-items: center; }
+  .pw svg { position: absolute; left: 10px; color: var(--faint); pointer-events: none; }
+  .pw input { width: 210px; padding: 7px 12px 7px 32px; border: 1px solid var(--line); border-radius: 999px; background: var(--raised); font-size: 13.5px; }
+  .pw input:focus { border-color: var(--accent); background: var(--surface); outline: none; box-shadow: 0 0 0 3px var(--accent-soft); }
+  .pw.bad input { border-color: var(--bad); box-shadow: 0 0 0 3px var(--bad-bg); }
+  .pw.ok svg { color: var(--ok); }
+  .hbtn { display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); cursor: pointer; font-size: 13.5px; font-weight: 500; white-space: nowrap; }
+  .hbtn:hover { background: var(--raised); }
+  .hbtn .n { min-width: 20px; padding: 0 6px; border-radius: 999px; background: var(--accent); color: var(--on-accent); font-size: 12px; font-weight: 600; text-align: center; font-variant-numeric: tabular-nums; }
+  #outboxBtn { display: none; }
+
+  /* main area */
+  .app { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 360px; }
+  .chat { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+  #log { flex: 1; overflow-y: auto; padding: 24px 16px 8px; scroll-behavior: smooth; }
+  .col { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 14px; }
+
+  .welcome { margin: 4vh auto 8px; text-align: center; max-width: 560px; }
+  .welcome h2 { font: 700 clamp(24px, 3.4vw, 32px)/1.15 var(--f-display); margin: 0 0 8px; letter-spacing: -.015em; text-wrap: balance; }
+  .welcome p { margin: 0 auto 20px; color: var(--muted); max-width: 46ch; }
+  .chips { display: grid; gap: 8px; text-align: left; }
+  .chip { display: flex; gap: 10px; align-items: flex-start; padding: 11px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); cursor: pointer; text-align: left; box-shadow: var(--shadow); transition: border-color .15s, transform .15s; }
+  .chip:hover { border-color: var(--accent); transform: translateY(-1px); }
+  .chip b { display: block; font-weight: 600; font-size: 14px; }
+  .chip span { color: var(--muted); font-size: 13.5px; }
+  .chip svg { flex: none; margin-top: 2px; color: var(--accent); }
+
+  .row { display: flex; gap: 10px; align-items: flex-end; }
+  .row.me { justify-content: flex-end; }
+  .avatar { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); }
+  .bubble { max-width: min(78%, 620px); padding: 10px 14px; border-radius: var(--radius); overflow-wrap: anywhere; }
+  .me .bubble { background: var(--accent); color: var(--on-accent); border-bottom-right-radius: 4px; white-space: pre-wrap; }
+  .bot .bubble { background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 4px; box-shadow: var(--shadow); }
+  .bubble p { margin: 0; }
+  .bubble p + p, .bubble p + ul, .bubble ul + p, .bubble p + ol, .bubble ol + p { margin-top: 8px; }
+  .bubble ul, .bubble ol { margin: 0; padding-left: 20px; }
+  .bubble li + li { margin-top: 2px; }
+  .bubble code { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: .9em; background: var(--raised); padding: .05em .35em; border-radius: 4px; }
+  .time { display: block; margin-top: 4px; font-size: 11.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
+  .me .time { text-align: right; color: color-mix(in srgb, var(--on-accent) 70%, transparent); }
+  .bubble.error { background: var(--bad-bg); border-color: transparent; color: var(--bad); box-shadow: none; }
+
+  .typing { display: inline-flex; gap: 4px; padding: 4px 0; }
+  .typing i { width: 7px; height: 7px; border-radius: 50%; background: var(--faint); animation: blink 1.2s infinite ease-in-out; }
+  .typing i:nth-child(2) { animation-delay: .15s; }
+  .typing i:nth-child(3) { animation-delay: .3s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: .25; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+
+  /* composer */
+  .composer { flex: none; padding: 10px 16px; padding-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  .composer form { max-width: 760px; margin: 0 auto; display: flex; align-items: flex-end; gap: 8px; padding: 6px 6px 6px 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--surface); box-shadow: var(--shadow); }
+  .composer form:focus-within { border-color: var(--accent); }
+  #m { flex: 1; min-width: 0; border: 0; background: transparent; resize: none; padding: 8px 0; max-height: 160px; line-height: 1.5; outline: none; }
+  #send { flex: none; width: 40px; height: 40px; border: 0; border-radius: 12px; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; cursor: pointer; }
+  #send:hover { background: var(--accent-hover); }
+  #send:disabled { opacity: .45; cursor: default; }
+  .hint { max-width: 760px; margin: 6px auto 0; font-size: 12px; color: var(--faint); text-align: center; }
+
+  /* outbox */
+  aside { min-height: 0; display: flex; flex-direction: column; background: var(--surface); border-left: 1px solid var(--line); }
+  .ohead { flex: none; display: flex; align-items: center; gap: 8px; padding: 16px 16px 10px; }
+  .ohead h2 { margin: 0 auto 0 0; font: 700 16px/1.2 var(--f-display); }
+  .ibtn { width: 32px; height: 32px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); display: grid; place-items: center; cursor: pointer; color: var(--muted); }
+  .ibtn:hover { background: var(--raised); color: var(--ink); }
+  .ibtn.spin svg { animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #closeOutbox { display: none; }
+  .tabs { flex: none; display: flex; gap: 4px; padding: 0 16px 10px; border-bottom: 1px solid var(--line); }
+  .tab { padding: 4px 10px; border: 0; border-radius: 999px; background: transparent; color: var(--muted); font-size: 13px; font-weight: 500; cursor: pointer; }
+  .tab[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+  .tab .c { font-variant-numeric: tabular-nums; opacity: .8; }
+  #olist { flex: 1; overflow-y: auto; padding: 8px 10px 16px; display: flex; flex-direction: column; gap: 6px; }
+  .mail { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--raised); }
+  .mail .top { display: flex; align-items: center; gap: 8px; }
+  .mail .to { font-weight: 600; font-size: 13.5px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-right: auto; }
+  .mail .subj { font-size: 13.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mail .when { font-size: 12.5px; color: var(--muted); margin-top: 4px; display: flex; gap: 6px; align-items: center; font-variant-numeric: tabular-nums; }
+  .mail .id { color: var(--faint); }
+  .mail .err { margin-top: 6px; font-size: 12.5px; color: var(--bad); overflow-wrap: anywhere; }
+  .pill { flex: none; font-size: 11px; font-weight: 600; letter-spacing: .03em; padding: 2px 8px; border-radius: 999px; }
+  .pill.pending, .pill.sending { background: var(--wait-bg); color: var(--wait); }
+  .pill.sent { background: var(--ok-bg); color: var(--ok); }
+  .pill.failed { background: var(--bad-bg); color: var(--bad); }
+  .pill.cancelled { background: var(--idle-bg); color: var(--idle); }
+  .empty { margin: 32px 12px; text-align: center; color: var(--muted); font-size: 14px; }
+  .empty svg { color: var(--faint); margin-bottom: 8px; }
+  .ofoot { flex: none; padding: 10px 16px; border-top: 1px solid var(--line); font-size: 12px; color: var(--faint); }
+
+  .scrim { display: none; }
+
+  @media (max-width: 1100px) {
+    .app { grid-template-columns: minmax(0, 1fr); }
+    #outboxBtn, #closeOutbox { display: inline-flex; }
+    #closeOutbox { display: grid; }
+    aside { position: fixed; z-index: 20; top: 0; right: 0; bottom: 0; width: min(380px, 92vw); padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); transform: translateX(100%); transition: transform .22s ease; box-shadow: var(--shadow); }
+    body.drawer aside { transform: none; }
+    body.drawer .scrim { display: block; position: fixed; inset: 0; z-index: 10; background: rgb(10 14 22 / .35); }
+  }
+  @media (max-width: 640px) {
+    header { flex-wrap: wrap; }
+    .brand small { display: none; }
+    .pw { order: 3; flex: 1 1 100%; }
+    .pw input { width: 100%; }
+    #newChat .lbl { display: none; }
+    .bubble { max-width: 88%; }
+    .avatar { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  }
+</style>
+</head>
+<body>
+<div class="stripe" aria-hidden="true"></div>
+<header>
+  <div class="brand">
+    <svg width="30" height="30" viewBox="0 0 32 32" fill="none" aria-hidden="true">
+      <rect x="2.5" y="7.5" width="22" height="16" rx="3" stroke="currentColor" stroke-width="2"/>
+      <path d="M3.5 9.5l10 7.5 10-7.5" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+      <circle cx="24" cy="22" r="6.5" fill="var(--surface)" stroke="currentColor" stroke-width="2"/>
+      <path d="M24 19v3.2l2 1.4" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+    </svg>
+    <div><h1>Mail Scheduler</h1><small>Schedule Gmail in plain English</small></div>
+  </div>
+  <label class="pw" id="pwWrap">
+    <span class="sr">Server password</span>
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+    <input id="pw" type="password" placeholder="Server password" autocomplete="current-password">
+  </label>
+  <button class="hbtn" id="newChat" type="button" title="Start a new conversation">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg><span class="lbl">New chat</span>
+  </button>
+  <button class="hbtn" id="outboxBtn" type="button" aria-controls="outbox">Outbox <span class="n" id="pendingCount" hidden>0</span></button>
+</header>
+
+<div class="app">
+  <section class="chat" aria-label="Chat">
+    <div id="log" aria-live="polite">
+      <div class="col" id="col">
+        <div class="welcome" id="welcome">
+          <h2>What should go out, and when?</h2>
+          <p>Describe the email and the time. It's sent from your Gmail at that moment, even if you close this page.</p>
+          <div class="chips">
+            <button class="chip" type="button" data-text="Email jane@example.com tomorrow at 9 AM with subject &quot;Standup&quot; reminding her about the 10 AM standup.">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+              <div><b>Schedule one email</b><span>"Email jane@example.com tomorrow at 9 AM…"</span></div>
+            </button>
+            <button class="chip" type="button" data-text="Send sam@example.com the same reminder &quot;Don't forget the meeting&quot; at 12 PM, 2 PM and 3 PM today.">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10"/></svg>
+              <div><b>Several times at once</b><span>"…at 12 PM, 2 PM and 3 PM today"</span></div>
+            </button>
+            <button class="chip" type="button" data-text="Cancel email ">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9 9l6 6M15 9l-6 6"/></svg>
+              <div><b>Cancel one</b><span>"Cancel email 3" (ids are in the Outbox)</span></div>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="composer">
+      <form id="f">
+        <label class="sr" for="m">Message</label>
+        <textarea id="m" rows="1" placeholder="Email someone at a time…" autocomplete="off"></textarea>
+        <button id="send" type="submit" aria-label="Send">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" aria-hidden="true"><path d="M4 12l16-8-6 16-2.5-6.5L4 12z"/></svg>
+        </button>
+      </form>
+      <p class="hint">Enter to send · Shift+Enter for a new line · Each message uses a few cents of Claude credit</p>
+    </div>
+  </section>
+
+  <aside id="outbox" aria-label="Outbox">
+    <div class="ohead">
+      <h2>Outbox</h2>
+      <button class="ibtn" id="refresh" type="button" title="Refresh" aria-label="Refresh outbox">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+      </button>
+      <button class="ibtn" id="closeOutbox" type="button" aria-label="Close outbox">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="tabs" role="group" aria-label="Filter">
+      <button class="tab" type="button" data-f="all" aria-pressed="true">All <span class="c" id="c-all"></span></button>
+      <button class="tab" type="button" data-f="pending" aria-pressed="false">Scheduled <span class="c" id="c-pending"></span></button>
+      <button class="tab" type="button" data-f="sent" aria-pressed="false">Sent <span class="c" id="c-sent"></span></button>
+      <button class="tab" type="button" data-f="failed" aria-pressed="false">Failed <span class="c" id="c-failed"></span></button>
+    </div>
+    <div id="olist"></div>
+    <p class="ofoot" id="ofoot">Checking the outbox doesn't use Claude credit.</p>
+  </aside>
+</div>
+<div class="scrim" id="scrim"></div>
+
+<script>
+// Where the server lives. Empty for the Python app (same server); docs/config.js sets it for Supabase.
+const API = window.MAIL_AGENT_API || '';
+const CHAT_URL = API + '/chat';
+const LIST_URL = API ? API + '/chat?list=1' : '/scheduled';
+
+const $ = (id) => document.getElementById(id);
+const log = $('log'), col = $('col'), f = $('f'), m = $('m'), btn = $('send'), pw = $('pw'), pwWrap = $('pwWrap');
+
+const store = {
+  get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
+};
+let session = store.get('sid') || crypto.randomUUID();
+store.set('sid', session);
+
+// A password box instead of prompt(): some embedded browsers (e.g. VS Code Simple Browser) block prompt().
+pw.value = store.get('pw') || '';
+pw.onchange = () => { pw.value = pw.value.trim(); store.set('pw', pw.value); pwWrap.classList.remove('bad'); loadOutbox(); };
+const getPw = () => pw.value.trim();
+const authHeaders = () => ({ 'Authorization': 'Bearer ' + getPw() });
+
+// ---- message rendering -------------------------------------------------------
+const esc = (s) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const inline = (s) => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>').replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+// Small, safe Markdown subset for Claude's replies: paragraphs, - and 1. lists, **bold**, `code`. Text is escaped first.
+function md(text) {
+  const out = []; let list = null;
+  const close = () => { if (list) { out.push(`</${list}>`); list = null; } };
+  for (const raw of text.split('\n')) {
+    const line = raw.trimEnd();
+    let mm;
+    if ((mm = line.match(/^\s*[-*•]\s+(.*)$/))) { if (list !== 'ul') { close(); out.push('<ul>'); list = 'ul'; } out.push(`<li>${inline(mm[1])}</li>`); }
+    else if ((mm = line.match(/^\s*\d+[.)]\s+(.*)$/))) { if (list !== 'ol') { close(); out.push('<ol>'); list = 'ol'; } out.push(`<li>${inline(mm[1])}</li>`); }
+    else if (!line.trim()) { close(); }
+    else { close(); out.push(`<p>${inline(line.replace(/^#+\s*/, ''))}</p>`); }
+  }
+  close();
+  return out.join('');
+}
+
+const clock = () => new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+const BOT_ICON = '<svg width="16" height="16" viewBox="0 0 32 32" fill="none" aria-hidden="true"><rect x="3" y="8" width="26" height="17" rx="3" stroke="currentColor" stroke-width="2.4"/><path d="M4 10l12 8.5L28 10" stroke="currentColor" stroke-width="2.4" stroke-linejoin="round"/></svg>';
+
+function addMsg(who, content, opts = {}) {
+  $('welcome')?.remove();
+  const row = document.createElement('div');
+  row.className = 'row ' + who;
+  if (who === 'bot') row.innerHTML = `<div class="avatar">${BOT_ICON}</div>`;
+  const b = document.createElement('div');
+  b.className = 'bubble' + (opts.error ? ' error' : '');
+  if (opts.typing) b.innerHTML = '<span class="typing" aria-label="Thinking"><i></i><i></i><i></i></span>';
+  else setBubble(b, who, content, opts);
+  row.appendChild(b);
+  col.appendChild(row);
+  log.scrollTop = log.scrollHeight;
+  return b;
+}
+function setBubble(b, who, content, opts = {}) {
+  b.classList.toggle('error', !!opts.error);
+  if (who === 'me' || opts.error) b.textContent = content;
+  else b.innerHTML = md(content);
+  const t = document.createElement('span'); t.className = 'time'; t.textContent = clock();
+  b.appendChild(t);
+  log.scrollTop = log.scrollHeight;
+}
+
+// ---- composer -----------------------------------------------------------------
+const grow = () => { m.style.height = 'auto'; m.style.height = Math.min(m.scrollHeight, 160) + 'px'; };
+m.addEventListener('input', grow);
+m.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); f.requestSubmit(); } });
+document.querySelectorAll('.chip').forEach((c) => c.onclick = () => { m.value = c.dataset.text; grow(); m.focus(); m.setSelectionRange(m.value.length, m.value.length); });
+
+f.onsubmit = async (e) => {
+  e.preventDefault();
+  const text = m.value.trim(); if (!text || btn.disabled) return;
+  if (!getPw()) { pwWrap.classList.add('bad'); pw.focus(); addMsg('bot', 'Enter the server password (APP_PASSWORD) in the box at the top first.', { error: true }); return; }
+  m.value = ''; grow(); addMsg('me', text); btn.disabled = true;
+  const wait = addMsg('bot', '', { typing: true });
+  try {
+    const r = await fetch(CHAT_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders() }, body: JSON.stringify({ session_id: session, message: text }) });
+    if (r.status === 401) { pwWrap.classList.add('bad'); pwWrap.classList.remove('ok'); setBubble(wait, 'bot', 'Wrong password. Fix it in the box at the top and try again.', { error: true }); }
+    else if (!r.ok) { setBubble(wait, 'bot', 'Server error: ' + r.status + '. Check that the app is running and try again.', { error: true }); }
+    else { pwWrap.classList.remove('bad'); pwWrap.classList.add('ok'); setBubble(wait, 'bot', (await r.json()).reply || '(no reply)'); loadOutbox(); }
+  } catch (err) { setBubble(wait, 'bot', 'Network error: ' + err.message, { error: true }); }
+  btn.disabled = false; m.focus();
+};
+
+$('newChat').onclick = () => {
+  session = crypto.randomUUID(); store.set('sid', session);
+  col.innerHTML = '';
+  addMsg('bot', 'New conversation started. Your scheduled emails are unaffected; they\'re in the Outbox.');
+  m.focus();
+};
+
+// ---- outbox -------------------------------------------------------------------
+let mails = [], filter = 'all';
+const LABEL = { pending: 'Scheduled', sending: 'Sending', sent: 'Sent', failed: 'Failed', cancelled: 'Cancelled' };
+const fmtWhen = (iso) => new Date(iso).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+
+function renderOutbox() {
+  const counts = { all: mails.length, pending: 0, sent: 0, failed: 0 };
+  for (const x of mails) { if (x.status === 'pending' || x.status === 'sending') counts.pending++; else if (counts[x.status] !== undefined) counts[x.status]++; }
+  for (const k in counts) $('c-' + k).textContent = counts[k] || '';
+  const pc = $('pendingCount'); pc.textContent = counts.pending; pc.hidden = !counts.pending;
+
+  const shown = mails.filter((x) => filter === 'all' || x.status === filter || (filter === 'pending' && x.status === 'sending'));
+  // Upcoming first (soonest at top), then everything else newest first.
+  const live = (x) => x.status === 'pending' || x.status === 'sending';
+  shown.sort((a, b) => (live(b) - live(a)) || (live(a) ? new Date(a.send_at) - new Date(b.send_at) : new Date(b.send_at) - new Date(a.send_at)));
+
+  const list = $('olist');
+  if (!shown.length) {
+    list.innerHTML = `<div class="empty"><svg width="28" height="28" viewBox="0 0 32 32" fill="none" aria-hidden="true"><rect x="3" y="8" width="26" height="17" rx="3" stroke="currentColor" stroke-width="2"/><path d="M4 10l12 8.5L28 10" stroke="currentColor" stroke-width="2"/></svg><div>${mails.length ? 'Nothing in this view.' : 'No emails yet. Scheduled emails appear here.'}</div></div>`;
+    return;
+  }
+  list.innerHTML = shown.map((x) => `
+    <div class="mail">
+      <div class="top"><span class="to" title="${esc(x.to_addr)}">${esc(x.to_addr)}</span><span class="pill ${esc(x.status)}">${LABEL[x.status] || esc(x.status)}</span></div>
+      <div class="subj">${esc(x.subject || '(no subject)')}</div>
+      <div class="when"><span class="id">#${x.id}</span><span>${fmtWhen(x.send_at)}</span></div>
+      ${x.status === 'failed' && x.error ? `<div class="err">${esc(x.error)}</div>` : ''}
+    </div>`).join('');
+}
+
+async function loadOutbox() {
+  const foot = $('ofoot');
+  if (!getPw()) { mails = []; renderOutbox(); $('olist').innerHTML = '<div class="empty">Enter the server password to see your outbox.</div>'; return; }
+  const rb = $('refresh'); rb.classList.add('spin');
+  try {
+    const r = await fetch(LIST_URL, { headers: authHeaders() });
+    if (r.status === 401) { pwWrap.classList.add('bad'); $('olist').innerHTML = '<div class="empty">Wrong password, so the outbox can\'t load.</div>'; return; }
+    if (!r.ok) throw new Error('status ' + r.status);
+    mails = await r.json(); renderOutbox();
+    pwWrap.classList.add('ok'); pwWrap.classList.remove('bad');
+    foot.textContent = 'Updated ' + clock() + ' · checking doesn\'t use Claude credit';
+  } catch (err) {
+    foot.textContent = 'Couldn\'t load the outbox (' + err.message + ').';
+  } finally { rb.classList.remove('spin'); }
+}
+
+document.querySelectorAll('.tab').forEach((t) => t.onclick = () => {
+  filter = t.dataset.f;
+  document.querySelectorAll('.tab').forEach((x) => x.setAttribute('aria-pressed', String(x === t)));
+  renderOutbox();
+});
+$('refresh').onclick = loadOutbox;
+const openDrawer = (on) => { document.body.classList.toggle('drawer', on); if (on) loadOutbox(); };
+$('outboxBtn').onclick = () => openDrawer(true);
+$('closeOutbox').onclick = () => openDrawer(false);
+$('scrim').onclick = () => openDrawer(false);
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') openDrawer(false); });
+
+loadOutbox();
+setInterval(() => { if (!document.hidden) loadOutbox(); }, 30000);
+m.focus();
+</script>
+</body>
+</html>

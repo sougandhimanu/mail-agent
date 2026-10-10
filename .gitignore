@@ -1,0 +1,8 @@
+.env
+client_secret*.json
+data/
+__pycache__/
+supabase/.temp/
+supabase/.branches/
+supabase/.env
+supabase/secrets.env

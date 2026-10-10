@@ -1,0 +1,9 @@
+project_id = "mail-agent"
+
+# Both functions do their own auth (APP_PASSWORD for chat, CRON_SECRET for send-due),
+# so Supabase's JWT check is turned off for them.
+[functions.chat]
+verify_jwt = false
+
+[functions.send-due]
+verify_jwt = false
