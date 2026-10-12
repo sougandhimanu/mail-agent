@@ -36,18 +36,12 @@ npx supabase functions deploy chat
 npx supabase functions deploy send-due
 ```
 
-`supabase/secrets.env` (git-ignored) holds the function secrets:
+Before `secrets set`, copy `supabase/secrets.env.example` to `supabase/secrets.env` (git-ignored) and fill it in.
+Generate `APP_PASSWORD` and `CRON_SECRET` with `python -c "import secrets; print(secrets.token_urlsafe(32))"`.
 
-```
-ANTHROPIC_API_KEY=...
-APP_PASSWORD=...
-GOOGLE_CLIENT_ID=...
-GOOGLE_CLIENT_SECRET=...
-GOOGLE_REFRESH_TOKEN=...
-CRON_SECRET=<long random string>
-USER_TIMEZONE=America/Chicago
-CLAUDE_MODEL=claude-sonnet-5-5
-```
+If `link` fails with a privileges error (fine-grained access tokens without "API Key Secrets"), skip `link`/`db push`:
+paste `supabase/migrations/20261009000000_init.sql` into the dashboard's **SQL Editor** and run it, then add
+`--project-ref <project-ref>` to the `secrets set` and `functions deploy` commands.
 
 Then, in the dashboard's **SQL Editor**, give the cron job its URL and secret (stored encrypted in Vault):
 

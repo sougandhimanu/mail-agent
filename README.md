@@ -13,6 +13,23 @@ There are two ways to run it:
 
 The two don't share data: each has its own database of scheduled emails.
 
+> The original live demo is offline. To use the app, run your own copy (below). Nothing of the
+> author's is shared: each copy needs its own Claude key, Google OAuth client and Supabase project.
+
+## Run your own copy
+
+1. **Fork or download** this repo.
+2. **Get your credentials** (see [Credentials you need](#credentials-you-need)): an Anthropic API key and
+   a Google OAuth client, then run the token script to get your Gmail refresh token.
+3. **Try it locally first** (optional): copy `.env.example` to `.env`, fill it in, set `DRY_RUN=1`, and
+   follow [Run locally](#run-locally).
+4. **Deploy the cloud version** with [SUPABASE.md](SUPABASE.md): a free Supabase project, the migration,
+   your secrets (from `supabase/secrets.env.example`) and the two functions.
+5. **Point the chat page at your project**: set your URL in `docs/config.js`.
+6. **Publish the page**: in your fork, Settings -> Pages -> branch `main`, folder `/docs`.
+7. **Keep it awake**: add the repository variable `SUPABASE_FUNCTIONS_URL`, then enable the
+   "Keep Supabase awake" workflow in the Actions tab (GitHub disables scheduled workflows in forks).
+
 ## How it works (cloud)
 
 ```
@@ -81,3 +98,7 @@ instead of sending them. Emails only go out while this process is running.
   (roughly 1-3 cents).
 - Anyone with `APP_PASSWORD` can send mail as you. Keep it long and secret.
 - Gmail limits normal accounts to about 500 recipients a day.
+
+## License
+
+[MIT](LICENSE): free to copy, use and modify, keeping the copyright notice.
